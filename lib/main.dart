@@ -1,11 +1,17 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:responsive_ui/responsive_ui.dart';
 
 import 'Pages/ChattingPage.dart';
 import 'Pages/LoginPage.dart';
+import 'firebase_options.dart';
 
-void main() {
+Future<void> main() async {
+
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -42,11 +48,20 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final int sideBarWidth = 350;
+  bool? isLogin;
+  
+  @override
+  void initState() {
+    if (FirebaseAuth.instance.currentUser != null) {
+      isLogin = true;
+    }
+    super.initState();
+  }
+
   @override
   Widget build(BuildContext context) {
     // return ChattingPage();
-    return LoginPage();
+    return isLogin == true ? ChattingPage() :LoginPage();
   }
 }
 

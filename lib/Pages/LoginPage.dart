@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../Settings/Auth.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -30,7 +32,9 @@ class _LoginPageState extends State<LoginPage> {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
-                    onTap: null,
+                    onTap: (){
+                      FirebaseAuthService().signInWithGoogle(context);
+                    },
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
