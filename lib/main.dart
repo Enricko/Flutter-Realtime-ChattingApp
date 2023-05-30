@@ -85,8 +85,11 @@ class _MyHomePageState extends State<MyHomePage> {
                             children: [
                               for(int x = 1;x < 10;x++)
                               Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.white12,width: 1)
+                                ),
                                 height: 75,
-                                margin: EdgeInsets.symmetric(horizontal: 10),
+                                padding: EdgeInsets.symmetric(horizontal: 10),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.start,
                                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -145,23 +148,46 @@ class _MyHomePageState extends State<MyHomePage> {
                   children: [
                     Container(
                       height: 60,
-                      color: Colors.white,
+                      color: Colors.white24,
                       child: Row(
                         children: [
                           Container(
                             margin: EdgeInsets.symmetric(horizontal: 15),
                             child: IconButton(
                               icon: Icon(
-                                Icons.attachment
+                                Icons.attachment,
+                                color: Colors.white24,
+                                size: 30,
                               ),
                               onPressed: null,
                             ),
                           ),
                           Expanded(
                             child: TextFormField(
+                              style: TextStyle(
+                                color: Colors.white,
+                              ),
+                              cursorColor: Colors.white30,
                               decoration: InputDecoration(
-                                border: InputBorder(
-                                  borderSide: 
+                                hintText: 'Kirim Pesan',
+                                hintStyle: TextStyle(
+                                  color: Colors.white
+                                ),
+                                labelStyle: TextStyle(
+                                  color: Colors.white
+                                ),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 15),
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(color:Colors.white24, width: 3),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color:Colors.white24, width: 3),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color:Colors.white24, width: 3),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
                             ),
