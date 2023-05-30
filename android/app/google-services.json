@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "555964003017",
+    "firebase_url": "https://chattingapp-flutter-default-rtdb.firebaseio.com",
+    "project_id": "chattingapp-flutter",
+    "storage_bucket": "chattingapp-flutter.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:555964003017:android:0bdbdabe8dae663cbf9318",
+        "android_client_info": {
+          "package_name": "com.example.flutter_chatting_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "555964003017-b72scf800o9t0d99pj20pt851rkrg59m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOQ0VptTslVn6UlC8fNh7yDYeax8oWw5M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "555964003017-b72scf800o9t0d99pj20pt851rkrg59m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
