@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -28,13 +30,16 @@ class MyApp extends StatelessWidget {
       themeMode: ThemeMode.dark,
       darkTheme: Theme.of(context).copyWith(
         platform: TargetPlatform.android,
-        scaffoldBackgroundColor: Color.fromRGBO(7, 17, 26, 1),
-        primaryColor: Color.fromRGBO(21, 181, 114, 1),
-        canvasColor: Color.fromRGBO(7, 17, 26, 1),
+        scaffoldBackgroundColor: Color(0xFF27374D),
+        // primaryColor: Color.fromRGBO(21, 181, 114, 1),
+        // canvasColor: Color.fromRGBO(7, 17, 26, 1),
         textTheme: GoogleFonts.poppinsTextTheme(),
       ),
       theme: ThemeData(
         fontFamily: GoogleFonts.poppins().fontFamily,
+      ),
+      scrollBehavior: MaterialScrollBehavior().copyWith(
+        dragDevices: {PointerDeviceKind.mouse, PointerDeviceKind.touch, PointerDeviceKind.stylus, PointerDeviceKind.unknown},
       ),
       debugShowCheckedModeBanner: false,
       home: const MyHomePage(),

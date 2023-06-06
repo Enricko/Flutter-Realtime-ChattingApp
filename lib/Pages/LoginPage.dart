@@ -20,15 +20,32 @@ class _LoginPageState extends State<LoginPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
+                'ChattingApp By Enricko',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFDDE6ED),
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900
+                ),
+              ),
+              SizedBox(
+                height: 25,
+              ),
+              Text(
                 'LOGIN WITH',
                 style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900
+                  color: Color(0xFFDDE6ED),
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600
                 ),
               ),
               Container(
                 width: 150,
+                decoration: BoxDecoration(
+                  color: Color(0xFF526D82),
+                  borderRadius: BorderRadius.circular(5)
+                ),
+                padding: EdgeInsets.all(5),
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
@@ -48,7 +65,7 @@ class _LoginPageState extends State<LoginPage> {
                         Text(
                           "Google",
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: Color(0xFFDDE6ED),
                             fontSize: 18,
                             // fontWeight: FontWeight.w900
                           )
