@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +22,7 @@ class ChattingPage extends StatefulWidget {
 
 class _ChattingPageState extends State<ChattingPage> {
   TextEditingController messageController = TextEditingController();
+  final FocusNode unitCodeCtrlFocusNode = FocusNode();
   String? dateSection;
 
   
@@ -27,155 +30,173 @@ class _ChattingPageState extends State<ChattingPage> {
   .ref()
   .child('GlobalChat');
 
+  String now = DateFormat('yyyy-MM-dd').format(DateTime.now()).toString();
+  
   bool btnHide = true;
-  bool childAddedStatus = false;
+  bool readStatus = false;
+  bool onReadStatus = false;
+  String? _msgUid;
+
+  final ScrollController _controller = ScrollController();
 
   submitMessage(){
-    if (messageController.text != '' && FirebaseAuth.instance.currentUser != null) {
-      String now = DateFormat('yyyy-MM-dd').format(DateTime.now()).toString();
+    if (messageController.text.trim() != "" && FirebaseAuth.instance.currentUser != null) {
       final key = ref.child(now).push().key;
 
       Future.delayed(Duration(milliseconds: 100)).then((value) {
         Future.delayed(Duration(milliseconds: 100)).then((value) {
-          ref.child(now).child(key!).set({
-            'user_uid':FirebaseAuth.instance.currentUser!.uid,
-            'user_name':FirebaseAuth.instance.currentUser!.displayName,
-            'user_image':FirebaseAuth.instance.currentUser!.photoURL,
-            'message':messageController.text,
-            'created_at': DateTime.now().toString(),
-          }).whenComplete((){
-            ref.child(now).child(key).child('reader').set({
-              {
+          if (messageController.text.trim() != "") {
+            ref.child(now).child(key!).set({
+              'user_uid':FirebaseAuth.instance.currentUser!.uid,
+              'user_name':FirebaseAuth.instance.currentUser!.displayName,
+              'user_image':FirebaseAuth.instance.currentUser!.photoURL,
+              'message':messageController.text.trim(),
+              'created_at': DateTime.now().toString(),
+            }).whenComplete((){
+              ref.child(now).child(key).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
                 'user_uid':FirebaseAuth.instance.currentUser!.uid,
                 'user_name':FirebaseAuth.instance.currentUser!.displayName,
                 'user_image':FirebaseAuth.instance.currentUser!.photoURL,
-                'message_position': _controller.position.maxScrollExtent
-              }
+                'message_position': _controller.position.maxScrollExtent,
+                'created_at': DateTime.now().toString()
+              });
             });
-          });
+          }
           messageController.text = '';
         });
       });
     }
   }
-  final ScrollController _controller = ScrollController();
 
-  // This is what you're looking for!
-  void _scrollDownIn(double position) {
-    Future.delayed(Duration(milliseconds: 100)).then((value) {
-      _controller.position.moveTo(
-        position,
-        duration: Duration(milliseconds: 100),
-        curve: Curves.fastOutSlowIn,
-      );
-      Future.delayed(Duration(milliseconds: 100)).then((value) {
-        if (!_controller.position.atEdge) {
-          _controller.position.moveTo(
-            position,
-            duration: Duration(milliseconds: 100),
-            curve: Curves.fastOutSlowIn,
-          );
-        }
-      });
-    });
-  }
-
-  // void _scrollDownAuto() {
-  //   // print("${_controller.position.maxScrollExtent} scroll1");
-  //   ref.onChildAdded.listen((event) {
-  //     if (childAddedStatus) {
-  //       // if (_controller.) {
-  //         Future.delayed(Duration(milliseconds: 100)).then((value) {
-  //           _controller.position.moveTo(
-  //             _controller.position.maxScrollExtent,
-  //             duration: Duration(milliseconds: 100),
-  //             curve: Curves.fastOutSlowIn,
-  //           );
-  //           Future.delayed(Duration(milliseconds: 100)).then((value) {
-  //             if (!_controller.position.atEdge) {
-  //               _controller.position.moveTo(
-  //                 _controller.position.maxScrollExtent,
-  //                 duration: Duration(milliseconds: 100),
-  //                 curve: Curves.fastOutSlowIn,
-  //               );
-  //             }
-  //           });
-  //         });
-  //       // }        
-  //     }
+  // // This is what you're looking for!
+  // void _scrollDownIn(double position) {
+  //   Future.delayed(Duration(milliseconds: 100)).then((value) {
+  //     _controller.position.moveTo(
+  //       position,
+  //       duration: Duration(milliseconds: 100),
+  //       curve: Curves.fastOutSlowIn,
+  //     );
+  //     Future.delayed(Duration(milliseconds: 100)).then((value) {
+  //       if (!_controller.position.atEdge) {
+  //         _controller.position.moveTo(
+  //           position,
+  //           duration: Duration(milliseconds: 100),
+  //           curve: Curves.fastOutSlowIn,
+  //         );
+  //       }
+  //     });
   //   });
   // }
 
-  onRead(data){
-    final xLen = data.entries.last.value['reader'] as List<dynamic>;
-    int xCount = 0;
-    for (var x in data.entries.last.value['reader']) {
-      xCount++;
-
-      if (x['user_uid'] == FirebaseAuth.instance.currentUser!.uid) {
-        break;
-      }
-      if (xCount == xLen.length) {
-        ref.child(data.entries.last.key).child('reader').set({
-          {
-            'user_uid':FirebaseAuth.instance.currentUser!.uid,
-            'user_name':FirebaseAuth.instance.currentUser!.displayName,
-            'user_image':FirebaseAuth.instance.currentUser!.photoURL,
-            'message_position': _controller.position.maxScrollExtent
+  Future<void> lastRead()async {
+    ref.onValue.listen((event) {
+      if(readStatus == false){
+        Map data = event.snapshot.value as Map<String,dynamic>;
+        int count = 0;
+        outerLoop:
+        for (var i in data.entries.toList().reversed) {
+          Map msg = i.value as Map<String,dynamic>;
+          for (var x in msg.entries.toList().reversed) {
+            count++;
+            if (x.value['reader'] != null) {
+              final read = x.value['reader'] as Map<String,dynamic>;
+              if (read.containsKey(FirebaseAuth.instance.currentUser!.uid)) {
+                for (var y in read.entries.toList().reversed) {
+                  if (y != null && y.value['user_uid'] == FirebaseAuth.instance.currentUser!.uid) {
+                    if (count > 1) {
+                      _msgUid = x.key;
+                    }
+                    Future.delayed(Duration(milliseconds: 1000)).then((value) {
+                      _controller.position.jumpTo(
+                         _controller.position.maxScrollExtent - y.value['message_position'],
+                      );
+                    });
+                    readStatus = true;
+                    break outerLoop;
+                  }
+                }
+              };
+            }
           }
-        });
+        }
       }
-    }
+    });
+  }
+  Future<void> onRead()async {
+    ref.get().then((event) {
+      var count = 0;
+      // if (onReadStatus) {
+        Map data = event.value as Map<String,dynamic>;
+        for (var i in data.entries.toList().reversed) {
+          final msg = i.value as Map<String,dynamic>;
+          for (var x in msg.entries.toList().reversed) {
+            if (x.value['reader'] != null) {
+              final read = x.value['reader'] as Map<String?,dynamic>;
+              if (!read.containsKey(FirebaseAuth.instance.currentUser!.uid)) {
+                Future.delayed(Duration(milliseconds: 1000)).then((value) {
+                  ref.child(i.key).child(x.key!).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
+                    'user_uid':FirebaseAuth.instance.currentUser!.uid,
+                    'user_name':FirebaseAuth.instance.currentUser!.displayName,
+                    'user_image':FirebaseAuth.instance.currentUser!.photoURL,
+                    'message_position': _controller.position.maxScrollExtent,
+                    'created_at': DateTime.now().toString()
+                  });
+                });
+              }
+            }else{
+              Future.delayed(Duration(milliseconds: 1000)).then((value) {
+                ref.child(i.key).child(x.key!).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
+                  'user_uid':FirebaseAuth.instance.currentUser!.uid,
+                  'user_name':FirebaseAuth.instance.currentUser!.displayName,
+                  'user_image':FirebaseAuth.instance.currentUser!.photoURL,
+                  'message_position': _controller.position.maxScrollExtent,
+                  'created_at': DateTime.now().toString()
+                });
+              });
+            }
+          }
+        }
+      // }
+    });
+    // print('object');
   }
 
   @override
   void initState() {
     _controller.addListener(() {
-      if (_controller.position.pixels >
-          _controller.position.minScrollExtent + 5) {
+      // if (_controller.position.pixels >
+      //     _controller.position.minScrollExtent + 5) {
+      //   setState(() {
+      //     btnHide = false;
+      // print(_controller.position.atEdge);
+      //   });
+      // }
+      if (_controller.position.pixels <= _controller.position.minScrollExtent + 10) {
         setState(() {
-          btnHide = false;
+          onReadStatus = true;
+          // onRead();
         });
-      }
-      if (_controller.position.pixels >= _controller.position.maxScrollExtent) {
+      }else{
         setState(() {
-          btnHide = true;
+          onReadStatus = false;
         });
       }
     });
+    if (kIsWeb) {
+      html.window.onKeyPress.listen((html.KeyboardEvent e) {
+        unitCodeCtrlFocusNode.requestFocus();
+      });
+    }
+    Timer.periodic(
+      Duration(seconds: 5),
+      (timer){
+        onRead();
+      }
+    );
     // _scrollDownAuto();
-    // ref.onValue.listen((event) {
-    //   Map data = event.snapshot.value as Map;
-      // outerLoop:
-      // for (var i in data.entries.toList().reversed) {
-      //   if (i.value['reader'] != null) {
-      //     for (var x in i.value['reader']) {
-      //       if (x['user_uid'] == FirebaseAuth.instance.currentUser!.uid) {
-      //         Future.delayed(Duration(milliseconds: 100)).then((value) {
-      //             _controller.position.moveTo(
-      //               x['message_position'],
-      //               duration: Duration(milliseconds: 100),
-      //               curve: Curves.fastOutSlowIn,
-      //             );
-      //         });
-      //         break outerLoop;
-      //       }
-      //     }
-      //   }
-      // }
-      // onRead(data);
-      // print(data.entries.last.value['reader'].length);
-      
-      // if (data.entries.last.value['reader']) {
-        
-      // }
-      // Map lastRead = data.entries.last.value['reader'].asMap();
-      // // Map read = data['reader'] as Map;
-      // for (var x in lastRead.entries) {
-      //   print(x.value['user_uid']);
-      // }
-    // });
-    
+    if (readStatus == false) {
+      lastRead();
+    }
     super.initState();
   }
 
@@ -292,7 +313,7 @@ class _ChattingPageState extends State<ChattingPage> {
                         children: [
                           // Positioned(
                           //   // left: MediaQuery.of(context).size.width * 0.5,
-                          //   child: Container(
+                          //   child: Container(  
                           //     margin: EdgeInsets.symmetric(vertical: 15),
                           //     padding: EdgeInsets.symmetric(vertical: 1,horizontal: 5),
                           //     decoration: BoxDecoration(
@@ -308,470 +329,303 @@ class _ChattingPageState extends State<ChattingPage> {
                           //     ),
                           //   ),
                           // ),
-                          FirebaseDatabaseListView(
-                            controller: _controller,
+                          // FirebaseDatabaseListView(
+                          //   controller: _controller,
+                          //   query: ref,
+                          //   shrinkWrap: true,
+                          //   reverse: true,
+                          //   itemBuilder: (context, snapshot) {
+                                  
+                          //   },
+                          // ),
+                          FirebaseDatabaseQueryBuilder(
                             query: ref,
-                            reverse: true,
-                            itemBuilder: (context, snapshot) {
-                              var data = snapshot.value as Map<String,dynamic>;
-                              List<Widget> listWidget = [];
-                              listWidget.add(
-                                Container(
-                                  margin: EdgeInsets.symmetric(vertical: 15),
-                                  child: Row(
-                                      children: <Widget>[
-                                          const Expanded(
-                                              child: Divider(
-                                                height: 3,
-                                                color: Color(0xFF9DB2BF),
-                                              )
-                                          ),       
-                                          Text(
-                                            "${snapshot.key}",
-                                            style: TextStyle(
-                                              color: Color(0xFFDDE6ED),
-                                              fontWeight: FontWeight.w800
-                                            ),
-                                          ),        
-                                          const Expanded(
-                                              child: Divider(
-                                                height: 3,
-                                                color: Color(0xFF9DB2BF),
-                                              )
-                                          ),
-                                      ]
-                                  ),
-                                )
-                              );
-                              for (var i in data.entries) {
-                                final data = i.value as Map<Object?,Object?>;
-                                data['key'] = i.key;
-                                listWidget.add(ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: 30,
-                                    minWidth: 50,
-                                  ),
-                                  child: Container(
-                                    margin: EdgeInsets.symmetric(horizontal: 20,vertical: 10),
-                                    child: Row(
-                                      mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                      crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                      children: [
-                                        FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ?
-                                        Row(
-                                          mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                          crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,        
+                            builder: (BuildContext context, FirebaseQueryBuilderSnapshot snapshot, Widget? child) { 
+                              if (snapshot.hasData) {
+                                final s = snapshot.docs.reversed.toList();
+                                return ListView.builder(
+                                  itemCount: s.length,
+                                  shrinkWrap: true,
+                                  reverse: true,
+                                  controller: _controller,
+                                  physics: ClampingScrollPhysics(),
+                                  itemBuilder: (BuildContext context, int index) { 
+                                    final data = s[index].value as Map<String,dynamic>;
+                                    final val = data.entries.toList().reversed.toList();
+                                    return ListView.builder(
+                                      itemCount: val.length,
+                                      shrinkWrap: true,
+                                      reverse: true,
+                                      physics: ClampingScrollPhysics(),
+                                      itemBuilder: (BuildContext context, int index) { 
+                                        return Column(
                                           children: [
-                                            Text(
-                                              DateFormat("HH:mm").format(DateTime.parse("${data['created_at']}")),
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.white70,
-                                                fontWeight: FontWeight.w600,
-                                                // overflow: TextOverflow.fade
+                                            val.length != index + 1 ? Container() :
+                                            Container(
+                                              margin: EdgeInsets.symmetric(vertical: 15),
+                                              child: Row(
+                                                  children: <Widget>[
+                                                      const Expanded(
+                                                          child: Divider(
+                                                            height: 3,
+                                                            color: Color(0xFF9DB2BF),
+                                                          )
+                                                      ),       
+                                                      Text(
+                                                        DateFormat("yyyy-MM-dd").format(DateTime.parse("${val[index].value['created_at']}")),
+                                                        style: TextStyle(
+                                                          color: Color(0xFFDDE6ED),
+                                                          fontWeight: FontWeight.w800
+                                                        ),
+                                                      ),        
+                                                      const Expanded(
+                                                          child: Divider(
+                                                            height: 3,
+                                                            color: Color(0xFF9DB2BF),
+                                                          )
+                                                      ),
+                                                  ]
                                               ),
                                             ),
                                             ConstrainedBox(
                                               constraints: BoxConstraints(
                                                 minHeight: 30,
                                                 minWidth: 50,
-                                                maxWidth: MediaQuery.of(context).size.width * 0.8
                                               ),
                                               child: Container(
-                                                padding: EdgeInsets.all(15),
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(15),
-                                                  color: Colors.white10,
-                                                ),
-                                                child: Column(
-                                                  mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                                  crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                                margin: EdgeInsets.symmetric(horizontal: 20,vertical: 10),
+                                                child: Row(
+                                                  mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                                  crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(
-                                                      "${data['user_name']}",
-                                                      textAlign: TextAlign.end,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.white,
-                                                        fontWeight: FontWeight.w900
-                                                        // overflow: TextOverflow.fade
+                                                    FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ?
+                                                    Row(
+                                                      mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                                      crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,        
+                                                      children: [
+                                                        Text(
+                                                          DateFormat("HH:mm").format(DateTime.parse("${val[index].value['created_at']}")),
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            color: Colors.white70,
+                                                            fontWeight: FontWeight.w600,
+                                                            // overflow: TextOverflow.fade
+                                                          ),
+                                                        ),
+                                                        ConstrainedBox(
+                                                          constraints: BoxConstraints(
+                                                            minHeight: 30,
+                                                            minWidth: 50,
+                                                            maxWidth: MediaQuery.of(context).size.width * 0.8
+                                                          ),
+                                                          child: Container(
+                                                            padding: EdgeInsets.all(15),
+                                                            decoration: BoxDecoration(
+                                                              borderRadius: BorderRadius.circular(15),
+                                                              color: Color(0xFF526D82),
+                                                            ),
+                                                            child: Column(
+                                                              mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                                              crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                                              children: [
+                                                                Text(
+                                                                  "${val[index].value['user_name']}",
+                                                                  textAlign: TextAlign.end,
+                                                                  style: TextStyle(
+                                                                    fontSize: 12,
+                                                                    color: Colors.white,
+                                                                    fontWeight: FontWeight.w900
+                                                                    // overflow: TextOverflow.fade
+                                                                  ),
+                                                                ),
+                                                                Text(
+                                                                  "${val[index].value['message']}",
+                                                                  style: TextStyle(
+                                                                    fontSize: 15,
+                                                                    color: Colors.white70,
+                                                                    // overflow: TextOverflow.fade
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ):
+                                            
+                                                    Container(
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(50),
+                                                        child: CachedNetworkImage(
+                                                          imageUrl: '${val[index].value['user_image']}',
+                                                          width: 30,
+                                                          placeholder: (context, url) {
+                                                            return Container(
+                                                              padding: EdgeInsets.all(3),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.white10,
+                                                                borderRadius: BorderRadius.circular(50)
+                                                              ),
+                                                              child: Icon(
+                                                                Icons.person,
+                                                                color: Colors.white,
+                                                              ),
+                                                            );
+                                                          },
+                                                          errorWidget: (context, url, error) {
+                                                            return Container(
+                                                              padding: EdgeInsets.all(3),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.white10,
+                                                                borderRadius: BorderRadius.circular(50)
+                                                              ),
+                                                              child: Icon(
+                                                                Icons.person,
+                                                                color: Colors.white,
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
                                                       ),
                                                     ),
-                                                    Text(
-                                                      "${data['message']}",
-                                                      style: TextStyle(
-                                                        fontSize: 15,
-                                                        color: Colors.white70,
-                                                        // overflow: TextOverflow.fade
-                                                      ),
+                                                    SizedBox(
+                                                      width: 10,
                                                     ),
+                                                    FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ?
+                                                    Container(
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(50),
+                                                        child: CachedNetworkImage(
+                                                          imageUrl: '${val[index].value['user_image']}',
+                                                          width: 30,
+                                                          placeholder: (context, url) {
+                                                            return Container(
+                                                              padding: EdgeInsets.all(3),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.white10,
+                                                                borderRadius: BorderRadius.circular(50)
+                                                              ),
+                                                              child: Icon(
+                                                                Icons.person,
+                                                                color: Colors.white,
+                                                              ),
+                                                            );
+                                                          },
+                                                          errorWidget: (context, url, error) {
+                                                            return Container(
+                                                              padding: EdgeInsets.all(3),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.white10,
+                                                                borderRadius: BorderRadius.circular(50)
+                                                              ),
+                                                              child: Icon(
+                                                                Icons.person,
+                                                                color: Colors.white,
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ):
+                                                    Row(
+                                                      mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid != val[index].value['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                                      crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid != val[index].value['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,        
+                                                      children: [
+                                                        ConstrainedBox(
+                                                          constraints: BoxConstraints(
+                                                            minHeight: 30,
+                                                            minWidth: 50,
+                                                            maxWidth: MediaQuery.of(context).size.width * 0.8
+                                                          ),
+                                                          child: Container(
+                                                            padding: EdgeInsets.all(15),
+                                                            decoration: BoxDecoration(
+                                                              borderRadius: BorderRadius.circular(15),
+                                                              color: Color(0xFF526D82),
+                                                            ),
+                                                            child: Column(
+                                                            mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                                            crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == val[index].value['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                                              children: [
+                                                                Text(
+                                                                  "${val[index].value['user_name']}",
+                                                                  textAlign: TextAlign.end,
+                                                                  style: TextStyle(
+                                                                    fontSize: 12,
+                                                                    color: Colors.white,
+                                                                    fontWeight: FontWeight.w900
+                                                                    // overflow: TextOverflow.fade
+                                                                  ),
+                                                                ),
+                                                                Text(
+                                                                  "${val[index].value['message']}",
+                                                                  style: TextStyle(
+                                                                    fontSize: 15,
+                                                                    color: Colors.white70,
+                                                                    // overflow: TextOverflow.fade
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          "${DateFormat("HH:mm").format(DateTime.parse("${val[index].value['created_at']}"))}",
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            color: Colors.white70,
+                                                            fontWeight: FontWeight.w600,
+                                                            // overflow: TextOverflow.fade
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    )
                                                   ],
                                                 ),
                                               ),
                                             ),
-                                          ],
-                                        ):
-                                
-                                        Container(
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(50),
-                                            child: CachedNetworkImage(
-                                              imageUrl: '${data['user_image']}',
-                                              width: 30,
-                                              placeholder: (context, url) {
-                                                return Container(
-                                                  padding: EdgeInsets.all(3),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white10,
-                                                    borderRadius: BorderRadius.circular(50)
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.person,
-                                                    color: Colors.white,
-                                                  ),
-                                                );
-                                              },
-                                              errorWidget: (context, url, error) {
-                                                return Container(
-                                                  padding: EdgeInsets.all(3),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white10,
-                                                    borderRadius: BorderRadius.circular(50)
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.person,
-                                                    color: Colors.white,
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: 10,
-                                        ),
-                                        FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ?
-                                        Container(
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(50),
-                                            child: CachedNetworkImage(
-                                              imageUrl: '${data['user_image']}',
-                                              width: 30,
-                                              placeholder: (context, url) {
-                                                return Container(
-                                                  padding: EdgeInsets.all(3),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white10,
-                                                    borderRadius: BorderRadius.circular(50)
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.person,
-                                                    color: Colors.white,
-                                                  ),
-                                                );
-                                              },
-                                              errorWidget: (context, url, error) {
-                                                return Container(
-                                                  padding: EdgeInsets.all(3),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white10,
-                                                    borderRadius: BorderRadius.circular(50)
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.person,
-                                                    color: Colors.white,
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ):
-                                        Row(
-                                          mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid != data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                          crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid != data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,        
-                                          children: [
-                                            ConstrainedBox(
-                                              constraints: BoxConstraints(
-                                                minHeight: 30,
-                                                minWidth: 50,
-                                                maxWidth: MediaQuery.of(context).size.width * 0.8
-                                              ),
-                                              child: Container(
-                                                padding: EdgeInsets.all(15),
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(15),
-                                                  color: Color(0xFF526D82),
-                                                ),
-                                                child: Column(
-                                                mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                                crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      "${data['user_name']}",
-                                                      textAlign: TextAlign.end,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.white,
-                                                        fontWeight: FontWeight.w900
-                                                        // overflow: TextOverflow.fade
+                                            _msgUid == val[index].key ?
+                                            Container(
+                                              margin: EdgeInsets.symmetric(vertical: 15),
+                                              child: Row(
+                                                  children: <Widget>[
+                                                      const Expanded(
+                                                          child: Divider(
+                                                            height: 3,
+                                                            color: Color.fromARGB(255, 238, 79, 79),
+                                                          )
+                                                      ),       
+                                                      Text(
+                                                        "New Message",
+                                                        style: TextStyle(
+                                                          color: Color.fromARGB(255, 255, 34, 34),
+                                                          fontWeight: FontWeight.w800
+                                                        ),
+                                                      ),        
+                                                      const Expanded(
+                                                          child: Divider(
+                                                            height: 3,
+                                                            color: Color.fromARGB(255, 238, 79, 79),
+                                                          )
                                                       ),
-                                                    ),
-                                                    Text(
-                                                      "${data['message']}",
-                                                      style: TextStyle(
-                                                        fontSize: 15,
-                                                        color: Colors.white70,
-                                                        // overflow: TextOverflow.fade
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                  ]
                                               ),
-                                            ),
-                                            Text(
-                                              "${DateFormat("H:m").format(DateTime.parse("${data['created_at']}"))}",
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.white70,
-                                                fontWeight: FontWeight.w600,
-                                                // overflow: TextOverflow.fade
-                                              ),
-                                            ),
+                                            ):Container(),
                                           ],
-                                        )
-                                      ],
-                                    ),
-                                  ),
-                                ));
-                                
+                                        ); 
+                                      },
+                                    );
+                                    
+                                    
+                                    // return Column(
+                                    //   children: listWidget,
+                                    // );  
+                                  },
+                                );
                               }
-                              // }
-                              return Column(
-                                children: listWidget,
-                              );
-
-                              // if (data.length == index + 1) {
-                              //   childAddedStatus = true;
-                              // }
                               return Container();
-                              
                             },
                           ),
-                          
-                          // FirebaseAnimatedList(
-                          //   controller: _controller,
-                          //   query: ref.orderByChild('created_at'),
-                          //   shrinkWrap: true,
-                          //   itemBuilder: (context, snapshot, animation, index){
-                          //     Map data = snapshot.value as Map;
-                          //     data['key'] = snapshot.key;
-                          //     if (data.length == index + 1) {
-                          //       childAddedStatus = true;
-                          //     }
-                          //     dateSection = DateFormat("yyyy-MM-dd").format(DateTime.parse(data['created_at']));
-
-                          //     return ConstrainedBox(
-                          //       constraints: BoxConstraints(
-                          //         minHeight: 30,
-                          //         minWidth: 50,
-                          //       ),
-                          //       child: Container(
-                          //         margin: EdgeInsets.symmetric(horizontal: 20,vertical: 10),
-                          //         child: Row(
-                          //           mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                          //           crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          //           children: [
-                          //             FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ?
-                          //             Row(
-                          //               mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                          //               crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,        
-                          //               children: [
-                          //                 Text(
-                          //                   "${DateFormat("HH:mm").format(DateTime.parse(data['created_at']))}",
-                          //                   style: TextStyle(
-                          //                     fontSize: 11,
-                          //                     color: Colors.white70,
-                          //                     fontWeight: FontWeight.w600,
-                          //                     // overflow: TextOverflow.fade
-                          //                   ),
-                          //                 ),
-                          //                 ConstrainedBox(
-                          //                   constraints: BoxConstraints(
-                          //                     minHeight: 30,
-                          //                     minWidth: 50,
-                          //                     maxWidth: MediaQuery.of(context).size.width * 0.8
-                          //                   ),
-                          //                   child: Container(
-                          //                     padding: EdgeInsets.all(15),
-                          //                     decoration: BoxDecoration(
-                          //                       borderRadius: BorderRadius.circular(15),
-                          //                       color: Colors.white10,
-                          //                     ),
-                          //                     child: Column(
-                          //                       mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                          //                       crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          //                       children: [
-                          //                         Text(
-                          //                           data['user_name'],
-                          //                           textAlign: TextAlign.end,
-                          //                           style: TextStyle(
-                          //                             fontSize: 12,
-                          //                             color: Colors.white,
-                          //                             fontWeight: FontWeight.w900
-                          //                             // overflow: TextOverflow.fade
-                          //                           ),
-                          //                         ),
-                          //                         Text(
-                          //                           data['message'],
-                          //                           style: TextStyle(
-                          //                             fontSize: 15,
-                          //                             color: Colors.white70,
-                          //                             // overflow: TextOverflow.fade
-                          //                           ),
-                          //                         ),
-                          //                       ],
-                          //                     ),
-                          //                   ),
-                          //                 ),
-                          //               ],
-                          //             ):
-                          //             Container(
-                          //               child: ClipRRect(
-                          //                 borderRadius: BorderRadius.circular(50),
-                          //                 child: Image.network(
-                          //                   '${data['user_image']}',
-                          //                   width: 30,
-                          //                   loadingBuilder: (context, child, loadingProgress) {
-                          //                     return Container(
-                          //                       padding: EdgeInsets.all(3),
-                          //                       decoration: BoxDecoration(
-                          //                         color: Colors.white12,
-                          //                         borderRadius: BorderRadius.circular(50)
-                          //                       ),
-                          //                       child: Icon(
-                          //                         Icons.person,
-                          //                         color: Colors.white,
-                          //                       ),
-                          //                     );
-                          //                   },
-                          //                   errorBuilder: (context, child, loadingProgress) {
-                          //                     return Container(
-                          //                       padding: EdgeInsets.all(3),
-                          //                       decoration: BoxDecoration(
-                          //                         color: Colors.white10,
-                          //                         borderRadius: BorderRadius.circular(50)
-                          //                       ),
-                          //                       child: Icon(
-                          //                         Icons.person,
-                          //                         color: Colors.white,
-                          //                       ),
-                          //                     );
-                          //                   },
-                          //                 ),
-                          //               ),
-                          //             ),
-                          //             SizedBox(
-                          //               width: 10,
-                          //             ),
-                          //             FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ?
-                          //             Container(
-                          //               child: ClipRRect(
-                          //                 borderRadius: BorderRadius.circular(50),
-                          //                 child: Image.network(
-                          //                   '${data['user_image']}',
-                          //                   width: 30,
-                          //                   loadingBuilder: (context, child, loadingProgress) {
-                          //                     return Container(
-                          //                       padding: EdgeInsets.all(3),
-                          //                       decoration: BoxDecoration(
-                          //                         color: Colors.white10,
-                          //                         borderRadius: BorderRadius.circular(50)
-                          //                       ),
-                          //                       child: Icon(
-                          //                         Icons.person,
-                          //                         color: Colors.white,
-                          //                       ),
-                          //                     );
-                          //                   },
-                          //                   errorBuilder: (context, child, loadingProgress) {
-                          //                     return Container(
-                          //                       padding: EdgeInsets.all(3),
-                          //                       decoration: BoxDecoration(
-                          //                         color: Colors.white10,
-                          //                         borderRadius: BorderRadius.circular(50)
-                          //                       ),
-                          //                       child: Icon(
-                          //                         Icons.person,
-                          //                         color: Colors.white,
-                          //                       ),
-                          //                     );
-                          //                   },
-                          //                 ),
-                          //               ),
-                          //             ):
-                          //             Row(
-                          //               mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid != data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                          //               crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid != data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,        
-                          //               children: [
-                          //                 ConstrainedBox(
-                          //                   constraints: BoxConstraints(
-                          //                     minHeight: 30,
-                          //                     minWidth: 50,
-                          //                     maxWidth: MediaQuery.of(context).size.width * 0.8
-                          //                   ),
-                          //                   child: Container(
-                          //                     padding: EdgeInsets.all(15),
-                          //                     decoration: BoxDecoration(
-                          //                       borderRadius: BorderRadius.circular(15),
-                          //                       color: Color(0xFF526D82),
-                          //                     ),
-                          //                     child: Column(
-                          //                     mainAxisAlignment: FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-                          //                     crossAxisAlignment:  FirebaseAuth.instance.currentUser!.uid == data['user_uid'] ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          //                       children: [
-                          //                         Text(
-                          //                           data['user_name'],
-                          //                           textAlign: TextAlign.end,
-                          //                           style: TextStyle(
-                          //                             fontSize: 12,
-                          //                             color: Colors.white,
-                          //                             fontWeight: FontWeight.w900
-                          //                             // overflow: TextOverflow.fade
-                          //                           ),
-                          //                         ),
-                          //                         Text(
-                          //                           data['message'],
-                          //                           style: TextStyle(
-                          //                             fontSize: 15,
-                          //                             color: Colors.white70,
-                          //                             // overflow: TextOverflow.fade
-                          //                           ),
-                          //                         ),
-                          //                       ],
-                          //                     ),
-                          //                   ),
-                          //                 ),
-                          //                 Text(
-                          //                   "${DateFormat("H:m").format(DateTime.parse(data['created_at']))}",
-                          //                   style: TextStyle(
-                          //                     fontSize: 11,
-                          //                     color: Colors.white70,
-                          //                     fontWeight: FontWeight.w600,
-                          //                     // overflow: TextOverflow.fade
-                          //                   ),
-                          //                 ),
-                          //               ],
-                          //             )
-                                    
-                          //           ],
-                          //         ),
-                          //       ),
-                          //     );
-                          //   },
-                          //   defaultChild: Center(
-                          //     child: CircularProgressIndicator(),
-                          //   ),
-                          // ),
                         ],
                       ),
                     ),
@@ -817,6 +671,8 @@ class _ChattingPageState extends State<ChattingPage> {
                                 keyboardType: TextInputType.text,
                                 minLines: 1,
                                 maxLines: 10,
+                                autofocus: true,
+                                focusNode: unitCodeCtrlFocusNode,
                                 // expands: true,
                                 style: TextStyle(
                                   color: Colors.white,
@@ -835,15 +691,15 @@ class _ChattingPageState extends State<ChattingPage> {
                                   ),
                                   contentPadding: EdgeInsets.symmetric(horizontal: 15,vertical: 15),
                                   border: OutlineInputBorder(
-                                    borderSide: BorderSide(color:Colors.white24, width: 3),
+                                    borderSide: BorderSide(color:Color(0xFF27374D), width: 3),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderSide: BorderSide(color:Colors.white24, width: 3),
+                                    borderSide: BorderSide(color:Color(0xFF9DB2BF), width: 3),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderSide: BorderSide(color:Colors.white, width: 3),
+                                    borderSide: BorderSide(color:Color(0xFF9DB2BF), width: 3),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
