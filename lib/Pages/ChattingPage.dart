@@ -145,29 +145,26 @@ class _ChattingPageState extends State<ChattingPage> {
         Map data = event.snapshot.value as Map<String,dynamic>;
         int count = 0;
         outerLoop:
-        for (var i in data.entries.toList().reversed) {
-          Map msg = i.value as Map<String,dynamic>;
-          for (var x in msg.entries.toList().reversed) {
-            count++;
-            if (x.value['reader'] != null) {
-              final read = x.value['reader'] as Map<String,dynamic>;
-              if (read.containsKey(FirebaseAuth.instance.currentUser!.uid)) {
-                for (var y in read.entries.toList().reversed) {
-                  if (y != null && y.value['user_uid'] == FirebaseAuth.instance.currentUser!.uid) {
-                    if (count > 1) {
-                      _msgUid = x.key;
-                    }
-                    Future.delayed(Duration(milliseconds: 1000)).then((value) {
-                      _controller.position.jumpTo(
-                         _controller.position.maxScrollExtent - y.value['message_position'],
-                      );
-                    });
-                    readStatus = true;
-                    break outerLoop;
+        for (var x in data.entries.toList().reversed) {
+          count++;
+          if (x.value['reader'] != null) {
+            final read = x.value['reader'] as Map<String,dynamic>;
+            if (read.containsKey(FirebaseAuth.instance.currentUser!.uid)) {
+              for (var y in read.entries.toList().reversed) {
+                if (y != null && y.value['user_uid'] == FirebaseAuth.instance.currentUser!.uid) {
+                  if (count > 1) {
+                    _msgUid = x.key;
                   }
+                  Future.delayed(Duration(milliseconds: 1000)).then((value) {
+                    _controller.position.jumpTo(
+                        _controller.position.maxScrollExtent - y.value['message_position'],
+                    );
+                  });
+                  readStatus = true;
+                  break outerLoop;
                 }
-              };
-            }
+              }
+            };
           }
         }
       }
@@ -179,25 +176,12 @@ class _ChattingPageState extends State<ChattingPage> {
       var count = 0;
       // if (onReadStatus) {
         Map data = event.value as Map<String,dynamic>;
-        for (var i in data.entries.toList().reversed) {
-          final msg = i.value as Map<String,dynamic>;
-          for (var x in msg.entries.toList().reversed) {
-            if (x.value['reader'] != null) {
-              final read = x.value['reader'] as Map<String?,dynamic>;
-              if (!read.containsKey(FirebaseAuth.instance.currentUser!.uid)) {
-                Future.delayed(Duration(milliseconds: 1000)).then((value) {
-                  ref.child(i.key).child(x.key!).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
-                    'user_uid':FirebaseAuth.instance.currentUser!.uid,
-                    'user_name':FirebaseAuth.instance.currentUser!.displayName,
-                    'user_image':FirebaseAuth.instance.currentUser!.photoURL,
-                    'message_position': _controller.position.maxScrollExtent,
-                    'created_at': DateTime.now().toString()
-                  });
-                });
-              }
-            }else{
+        for (var x in data.entries.toList().reversed) {
+          if (x.value['reader'] != null) {
+            final read = x.value['reader'] as Map<String?,dynamic>;
+            if (!read.containsKey(FirebaseAuth.instance.currentUser!.uid)) {
               Future.delayed(Duration(milliseconds: 1000)).then((value) {
-                ref.child(i.key).child(x.key!).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
+                ref.child(x.key!.toString()).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
                   'user_uid':FirebaseAuth.instance.currentUser!.uid,
                   'user_name':FirebaseAuth.instance.currentUser!.displayName,
                   'user_image':FirebaseAuth.instance.currentUser!.photoURL,
@@ -206,17 +190,31 @@ class _ChattingPageState extends State<ChattingPage> {
                 });
               });
             }
+          }else{
+            Future.delayed(Duration(milliseconds: 1000)).then((value) {
+              ref.child(x.key!.toString()).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
+                'user_uid':FirebaseAuth.instance.currentUser!.uid,
+                'user_name':FirebaseAuth.instance.currentUser!.displayName,
+                'user_image':FirebaseAuth.instance.currentUser!.photoURL,
+                'message_position': _controller.position.maxScrollExtent,
+                'created_at': DateTime.now().toString()
+              });
+            });
           }
         }
-      // }
     });
     // print('object');
   }
 
+  static DateTime returnDateAndTimeFormat(String time){
+    var dt = DateTime.parse(time);
+    return DateTime(dt.year, dt.month , dt.day);
+
+  }
+
   static String groupMessageDateAndTime(String time){
 
-    var dt = DateTime.fromMicrosecondsSinceEpoch(int.parse(time.toString()));
-    var originalDate = DateFormat('MM/dd/yyyy').format(dt);
+    var dt = DateTime.parse(time);
 
     final todayDate = DateTime.now();
 
@@ -251,8 +249,7 @@ class _ChattingPageState extends State<ChattingPage> {
       // }
       if (_controller.position.pixels <= _controller.position.minScrollExtent + 10) {
         setState(() {
-          onReadStatus = true;
-          // onRead();
+          _msgUid = "";
         });
       }else{
         setState(() {
@@ -269,16 +266,16 @@ class _ChattingPageState extends State<ChattingPage> {
       //   });
       // }
     }
-    // Timer.periodic(
-    //   Duration(seconds: 5),
-    //   (timer){
-    //     onRead();
-    //   }
-    // );
-    // // _scrollDownAuto();
-    // if (readStatus == false) {
-    //   lastRead();
-    // }
+    Timer.periodic(
+      Duration(seconds: 5),
+      (timer){
+        onRead();
+      }
+    );
+    // _scrollDownAuto();
+    if (readStatus == false) {
+      lastRead();
+    }
     super.initState();
   }
 
@@ -400,58 +397,60 @@ class _ChattingPageState extends State<ChattingPage> {
                             query: ref, 
                             builder: (BuildContext context, FirebaseQueryBuilderSnapshot snapshot, Widget? child) { 
                               if (snapshot.hasData) {
-                                final val = snapshot.docs.reversed;
-                                print(val.length);
+                                final val = snapshot.docs.toList().reversed.toList();
                                 return ListView.builder(
                                   itemCount: val.length,
                                   controller:_controller,
                                   reverse:true,
                                   shrinkWrap:true,
                                   itemBuilder:(context, index) {
-                                    final data = snapshot.docs[index].value as Map;
-                                    // final DateTime date = DateTime.parse(DateFormat('yyyy-MM-dd').format(DateTime.parse(data['created_at'])));
-                                    // String? newDate;
-                                    // bool isSameDate = false;
+                                    final data = val[index].value as Map;
+                                    final DateTime date = returnDateAndTimeFormat(data['created_at'].toString());
+                                    String? newDate;
+                                    bool isSameDate = false;
 
-                                    // if (index == 0 && val.length == 1) {
-                                    //   newDate = groupMessageDateAndTime(date.toString()).toString();
-                                    // } else if(index == val.length - 1) {
-                                    //   newDate = groupMessageDateAndTime(date.toString()).toString();
-                                    // }else{
-                                    //   // final addData = snapshot.docs[index+1].value as Map;
-                                    //   // final subData = snapshot.docs[index-1].value as Map;
-                                    //   // isSameDate = date.isAtSameMomentAs(DateTime.parse(DateFormat('yyyy-MM-dd').format(DateTime.parse(addData['created_at']))));
-                                    //   // newDate = isSameDate ? "" : DateTime.parse(DateFormat('yyyy-MM-dd').format(DateTime.parse(subData['created_at']))).toString();
-                                    // }
+                                    if (index == 0 && val.length == 1) {
+                                      newDate = groupMessageDateAndTime(date.toString()).toString();
+                                    } else if(index == 0) {
+                                      newDate = "";
+                                    } else if(index == val.length - 1) {
+                                      newDate = groupMessageDateAndTime(date.toString()).toString();
+                                    }else{
+                                      final addData = val[index+1].value as Map;
+                                      final subData = val[index-1].value as Map;
+                                      isSameDate = date.isAtSameMomentAs(returnDateAndTimeFormat(addData['created_at'].toString()));
+                                      newDate = isSameDate ? "" : returnDateAndTimeFormat(subData['created_at'].toString()).toString();
+                                    }
+
                                     return Column(
                                       children: [
-                                        // newDate!.isNotEmpty ?
-                                        // Container(
-                                        //   margin: EdgeInsets.symmetric(vertical: 15),
-                                        //   child: Row(
-                                        //       children: <Widget>[
-                                        //           const Expanded(
-                                        //               child: Divider(
-                                        //                 height: 3,
-                                        //                 color: Color(0xFF9DB2BF),
-                                        //               )
-                                        //           ),       
-                                        //           Text(
-                                        //             DateFormat("yyyy-MM-dd").format(DateTime.parse("${data['created_at']}")),
-                                        //             style: TextStyle(
-                                        //               color: Color(0xFFDDE6ED),
-                                        //               fontWeight: FontWeight.w800
-                                        //             ),
-                                        //           ),        
-                                        //           const Expanded(
-                                        //               child: Divider(
-                                        //                 height: 3,
-                                        //                 color: Color(0xFF9DB2BF),
-                                        //               )
-                                        //           ),
-                                        //       ]
-                                        //   ),
-                                        // ):Container(),
+                                        newDate!.isNotEmpty ?
+                                        Container(
+                                          margin: EdgeInsets.symmetric(vertical: 15),
+                                          child: Row(
+                                              children: <Widget>[
+                                                  const Expanded(
+                                                      child: Divider(
+                                                        height: 3,
+                                                        color: Color(0xFF9DB2BF),
+                                                      )
+                                                  ),       
+                                                  Text(
+                                                    DateFormat("yyyy-MM-dd").format(DateTime.parse("${data['created_at']}")),
+                                                    style: TextStyle(
+                                                      color: Color(0xFFDDE6ED),
+                                                      fontWeight: FontWeight.w800
+                                                    ),
+                                                  ),        
+                                                  const Expanded(
+                                                      child: Divider(
+                                                        height: 3,
+                                                        color: Color(0xFF9DB2BF),
+                                                      )
+                                                  ),
+                                              ]
+                                          ),
+                                        ):Container(),
                                         
                                         ConstrainedBox(
                                           constraints: BoxConstraints(
@@ -786,7 +785,7 @@ class _ChattingPageState extends State<ChattingPage> {
                                             ),
                                           ),
                                         ),
-                                        _msgUid == data['key'] ?
+                                        _msgUid == val[index].key ?
                                         Container(
                                           margin: EdgeInsets.symmetric(vertical: 15),
                                           child: Row(
@@ -825,21 +824,6 @@ class _ChattingPageState extends State<ChattingPage> {
                         ],
                       ),
                     ),
-                    // btnHide == true ? Container() :
-                    // Stack(
-                    //   children: [
-                    //     Positioned(
-                    //       // bottom: 130,
-                    //       // right: 20,
-                    //       child:ElevatedButton(
-                    //         onPressed: (){
-                    //           _scrollDown();
-                    //         },
-                    //         child: Icon(Icons.arrow_downward),
-                    //       ),
-                    //     ),
-                    //   ],
-                    // ),
                     ConstrainedBox(
                       constraints: BoxConstraints(
                         maxHeight: 350,
