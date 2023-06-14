@@ -40,7 +40,7 @@ class _ChattingPageState extends State<ChattingPage> {
   
   final ref = FirebaseDatabase.instance
   .ref()
-  .child('GlobalChats');
+  .child('GlobalChat');
 
   String now = DateFormat('yyyy-MM-dd').format(DateTime.now()).toString();
   
@@ -396,8 +396,23 @@ class _ChattingPageState extends State<ChattingPage> {
                           FirebaseDatabaseQueryBuilder(
                             query: ref, 
                             builder: (BuildContext context, FirebaseQueryBuilderSnapshot snapshot, Widget? child) { 
+                              if (snapshot.isFetching) {
+                                return Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
                               if (snapshot.hasData) {
                                 final val = snapshot.docs.toList().reversed.toList();
+                                if (val.length == 0) {
+                                  return Center(
+                                    child: Text(
+                                      "Be the first person to give a message",
+                                      style: TextStyle(
+                                        color: Colors.white
+                                      ),
+                                    ),
+                                  );
+                                }
                                 return ListView.builder(
                                   itemCount: val.length,
                                   controller:_controller,
@@ -818,7 +833,9 @@ class _ChattingPageState extends State<ChattingPage> {
                                   },
                                 );
                               }
-                              return Container();
+                              return Center(
+                                child: CircularProgressIndicator(),
+                              );
                             }, 
                           )
                         ],
@@ -882,7 +899,6 @@ class _ChattingPageState extends State<ChattingPage> {
                                   labelStyle: TextStyle(
                                     color: Colors.white
                                   ),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 15,vertical: 15),
                                   border: OutlineInputBorder(
                                     borderSide: BorderSide(color:Color(0xFF27374D), width: 3),
                                     borderRadius: BorderRadius.circular(10),
