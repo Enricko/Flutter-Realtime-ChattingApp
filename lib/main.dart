@@ -6,6 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:responsive_ui/responsive_ui.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 import 'Pages/ChattingPage.dart';
 import 'Pages/LoginPage.dart';
@@ -16,6 +17,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // FirebaseDatabase.instance.setPersistenceEnabled(true);
+  FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
   runApp(const MyApp());
 }
 

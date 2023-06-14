@@ -42,6 +42,7 @@ dependencies:
   responsive_ui: ^3.0.1
   firebase_ui_database: ^1.3.2
   cached_network_image: ^3.2.3
+  flutter_chat_bubble: ^2.0.2
 
   # Firebase Database & Auth
   firebase_core: ^2.13.0
@@ -50,6 +51,7 @@ dependencies:
   firebase_database: ^10.2.1
   cloud_firestore: ^4.8.0
   firebase_storage: ^11.2.3
+  firebase_analytics: ^10.4.3
 
   # System
   intl: ^0.18.0
