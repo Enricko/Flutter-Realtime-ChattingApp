@@ -1,6 +1,14 @@
 import 'dart:async';
 import 'dart:html' as html;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io';  
+import 'dart:io' show Platform;
+import 'dart:math' as math;
+
+import 'package:cool_dropdown/cool_dropdown.dart';
+import 'package:cool_dropdown/models/cool_dropdown_item.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
+import "package:image_picker/image_picker.dart";
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +17,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_ui_database/firebase_ui_database.dart';
 import 'package:firebase_database/ui/firebase_animated_list.dart';
 import 'package:flutter/material.dart';
+import 'package:photo_view/photo_view.dart';
 
 
 class ChattingPage extends StatefulWidget {
@@ -22,6 +31,8 @@ class ChattingPage extends StatefulWidget {
 
 class _ChattingPageState extends State<ChattingPage> {
   TextEditingController messageController = TextEditingController();
+  final listDropdownController = DropdownController();
+
   final FocusNode unitCodeCtrlFocusNode = FocusNode();
   String? dateSection;
 
@@ -37,30 +48,41 @@ class _ChattingPageState extends State<ChattingPage> {
   bool onReadStatus = false;
   String? _msgUid;
 
+  File? file;
+  ImagePicker image = ImagePicker();
+  Uint8List webImage = Uint8List(8);
+  var url;
+
   final ScrollController _controller = ScrollController();
 
-  submitMessage(){
-    if (messageController.text.trim() != "" && FirebaseAuth.instance.currentUser != null) {
+  submitMessage(String typeMessage,String image){
+    if ((messageController.text.trim() != "" || image != "") && FirebaseAuth.instance.currentUser != null) {
       final key = ref.child(now).push().key;
 
       Future.delayed(Duration(milliseconds: 100)).then((value) {
         Future.delayed(Duration(milliseconds: 100)).then((value) {
-          if (messageController.text.trim() != "") {
-            ref.child(now).child(key!).set({
-              'user_uid':FirebaseAuth.instance.currentUser!.uid,
-              'user_name':FirebaseAuth.instance.currentUser!.displayName,
-              'user_image':FirebaseAuth.instance.currentUser!.photoURL,
-              'message':messageController.text.trim(),
-              'created_at': DateTime.now().toString(),
-            }).whenComplete((){
-              ref.child(now).child(key).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
+          if (messageController.text.trim() != "" || image != "") {
+            try {
+              ref.child(now).child(key!).set({
                 'user_uid':FirebaseAuth.instance.currentUser!.uid,
                 'user_name':FirebaseAuth.instance.currentUser!.displayName,
                 'user_image':FirebaseAuth.instance.currentUser!.photoURL,
-                'message_position': _controller.position.maxScrollExtent,
-                'created_at': DateTime.now().toString()
+                'type_message':typeMessage,
+                'message':messageController.text.trim().toString(),
+                'image':image.toString(),
+                'created_at': DateTime.now().toString(),
+              }).whenComplete((){
+                ref.child(now).child(key).child('reader').child("${FirebaseAuth.instance.currentUser!.uid}").set({
+                  'user_uid':FirebaseAuth.instance.currentUser!.uid,
+                  'user_name':FirebaseAuth.instance.currentUser!.displayName,
+                  'user_image':FirebaseAuth.instance.currentUser!.photoURL,
+                  'message_position': _controller.position.maxScrollExtent,
+                  'created_at': DateTime.now().toString()
+                });
               });
-            });
+            } catch (e) {
+              print(e);
+            }
           }
           messageController.text = '';
         });
@@ -68,25 +90,53 @@ class _ChattingPageState extends State<ChattingPage> {
     }
   }
 
-  // // This is what you're looking for!
-  // void _scrollDownIn(double position) {
-  //   Future.delayed(Duration(milliseconds: 100)).then((value) {
-  //     _controller.position.moveTo(
-  //       position,
-  //       duration: Duration(milliseconds: 100),
-  //       curve: Curves.fastOutSlowIn,
-  //     );
-  //     Future.delayed(Duration(milliseconds: 100)).then((value) {
-  //       if (!_controller.position.atEdge) {
-  //         _controller.position.moveTo(
-  //           position,
-  //           duration: Duration(milliseconds: 100),
-  //           curve: Curves.fastOutSlowIn,
-  //         );
-  //       }
-  //     });
-  //   });
-  // }
+  getImageCamera() async {
+    XFile? img = await image.pickImage(source: ImageSource.camera,imageQuality: 50);
+    var f = await img!.readAsBytes();
+    setState(() {
+      webImage = f;
+      file = File(img!.path);
+    });
+
+    print(File(img!.path));
+  }
+  getImageGallery() async {
+    XFile? img = await image.pickImage(source: ImageSource.gallery,imageQuality: 50);
+    var f = await img!.readAsBytes();
+    setState(() {
+      webImage = f;
+      file = File(img!.path);
+    });
+    insertImage();
+  }
+
+  insertImage()async{
+    try {
+      var metadata = SettableMetadata(
+        contentType: "image/jpeg",
+      );
+      var imagefile = FirebaseStorage.instance
+          .ref()
+          .child("GlobalChat")
+          .child("${FirebaseAuth.instance.currentUser!.uid}-${DateTime.now()}.png");
+        
+      UploadTask task = imagefile.putData(webImage);
+      if (!kIsWeb) {
+        UploadTask task = imagefile.putFile(file!);
+      }
+      TaskSnapshot snapshot = await task;
+      url = await snapshot.ref.getDownloadURL();
+      setState(() {
+        url = url;
+      });
+      if (url != null) {
+        print(url);
+        submitMessage("image",url);
+      }
+    } on Exception catch (e) {
+      print(e);
+    }
+  }
 
   Future<void> lastRead()async {
     ref.onValue.listen((event) {
@@ -122,6 +172,7 @@ class _ChattingPageState extends State<ChattingPage> {
       }
     });
   }
+  
   Future<void> onRead()async {
     ref.get().then((event) {
       var count = 0;
@@ -183,9 +234,13 @@ class _ChattingPageState extends State<ChattingPage> {
       }
     });
     if (kIsWeb) {
-      html.window.onKeyPress.listen((html.KeyboardEvent e) {
-        unitCodeCtrlFocusNode.requestFocus();
-      });
+      // if (Platform.isAndroid) {
+      // } else if (Platform.isIOS) {
+      // }else if(Platform.isWindows){
+      //   html.window.onKeyPress.listen((html.KeyboardEvent e) {
+      //     unitCodeCtrlFocusNode.requestFocus();
+      //   });
+      // }
     }
     Timer.periodic(
       Duration(seconds: 5),
@@ -202,6 +257,9 @@ class _ChattingPageState extends State<ChattingPage> {
 
   @override
   Widget build(BuildContext context) {
+
+    double screenWidth = MediaQuery.of(context).size.width;
+    double screenHeight = MediaQuery.of(context).size.height;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -416,7 +474,7 @@ class _ChattingPageState extends State<ChattingPage> {
                                                           constraints: BoxConstraints(
                                                             minHeight: 30,
                                                             minWidth: 50,
-                                                            maxWidth: MediaQuery.of(context).size.width * 0.8
+                                                            maxWidth: screenWidth <= 600 ? screenWidth * 0.6 : screenWidth * 0.8
                                                           ),
                                                           child: Container(
                                                             padding: EdgeInsets.all(15),
@@ -438,6 +496,69 @@ class _ChattingPageState extends State<ChattingPage> {
                                                                     // overflow: TextOverflow.fade
                                                                   ),
                                                                 ),
+                                                                SizedBox(height: 5,),
+                                                                val[index].value['type_message'] == "image" ?
+                                                                GestureDetector(
+                                                                  onTap: () async{
+                                                                    await showDialog(
+                                                                      context: context,
+                                                                      barrierDismissible: true,
+                                                                      builder: (BuildContext context) { 
+                                                                        return AlertDialog(
+                                                                          shape: RoundedRectangleBorder(
+                                                                            borderRadius: BorderRadius.circular(10),
+                                                                          ),
+                                                                          backgroundColor: Color.fromARGB(255, 68, 68, 68),
+                                                                          content: Builder(builder: (context){
+                                                                            return Container(
+                                                                              width: screenWidth * 0.7,
+                                                                              child: PhotoView(
+                                                                                imageProvider: NetworkImage(val[index].value['image'])
+                                                                              ),
+                                                                            );
+                                                                          }),
+                                                                        );
+                                                                      }
+                                                                    );
+                                                                  },
+                                                                  child: CachedNetworkImage(
+                                                                    imageUrl: val[index].value['image'],
+                                                                    filterQuality: FilterQuality.medium,
+                                                                    fit: BoxFit.fitWidth,    
+                                                                    width: 250,
+                                                                    placeholder: (context, url) {
+                                                                      return Container(
+                                                                        width: 50,
+                                                                        child: Center(child: CircularProgressIndicator()),
+                                                                      );
+                                                                    },
+                                                                    errorWidget: (context, url, error) {
+                                                                      return Container(
+                                                                        width: 100,
+                                                                        padding: EdgeInsets.all(3),
+                                                                        decoration: BoxDecoration(
+                                                                          color: Colors.white10,
+                                                                          borderRadius: BorderRadius.circular(50)
+                                                                        ),
+                                                                        child: Column(
+                                                                          children: [
+                                                                            Icon(
+                                                                              Icons.image,
+                                                                              color: Colors.white,
+                                                                            ),
+                                                                            Text(
+                                                                              "Image Error",
+                                                                              style: TextStyle(
+                                                                                fontSize: 15,
+                                                                                color: Colors.white70,
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      );
+                                                                    },                           
+                                                                  ),
+                                                                ):
                                                                 Text(
                                                                   "${val[index].value['message']}",
                                                                   style: TextStyle(
@@ -535,7 +656,7 @@ class _ChattingPageState extends State<ChattingPage> {
                                                           constraints: BoxConstraints(
                                                             minHeight: 30,
                                                             minWidth: 50,
-                                                            maxWidth: MediaQuery.of(context).size.width * 0.8
+                                                            maxWidth: screenWidth <= 600 ? screenWidth * 0.6 : screenWidth * 0.8
                                                           ),
                                                           child: Container(
                                                             padding: EdgeInsets.all(15),
@@ -557,6 +678,69 @@ class _ChattingPageState extends State<ChattingPage> {
                                                                     // overflow: TextOverflow.fade
                                                                   ),
                                                                 ),
+                                                                SizedBox(height: 5,),
+                                                                val[index].value['type_message'] == "image" ?
+                                                                GestureDetector(
+                                                                  onTap: () async{
+                                                                    await showDialog(
+                                                                      context: context,
+                                                                      barrierDismissible: true,
+                                                                      builder: (BuildContext context) { 
+                                                                        return AlertDialog(
+                                                                          shape: RoundedRectangleBorder(
+                                                                            borderRadius: BorderRadius.circular(10),
+                                                                          ),
+                                                                          backgroundColor: Color.fromARGB(255, 68, 68, 68),
+                                                                          content: Builder(builder: (context){
+                                                                            return Container(
+                                                                              width: screenWidth * 0.7,
+                                                                              child: PhotoView(
+                                                                                imageProvider: NetworkImage(val[index].value['image'])
+                                                                              ),
+                                                                            );
+                                                                          }),
+                                                                        );
+                                                                      }
+                                                                    );
+                                                                  },
+                                                                  child: CachedNetworkImage(
+                                                                    imageUrl: val[index].value['image'],
+                                                                    filterQuality: FilterQuality.medium,
+                                                                    fit: BoxFit.fitWidth,    
+                                                                    width: 250,
+                                                                    placeholder: (context, url) {
+                                                                      return Container(
+                                                                        width: 50,
+                                                                        child: Center(child: CircularProgressIndicator()),
+                                                                      );
+                                                                    },
+                                                                    errorWidget: (context, url, error) {
+                                                                      return Container(
+                                                                        width: 100,
+                                                                        padding: EdgeInsets.all(3),
+                                                                        decoration: BoxDecoration(
+                                                                          color: Colors.white10,
+                                                                          borderRadius: BorderRadius.circular(50)
+                                                                        ),
+                                                                        child: Column(
+                                                                          children: [
+                                                                            Icon(
+                                                                              Icons.image,
+                                                                              color: Colors.white,
+                                                                            ),
+                                                                            Text(
+                                                                              "Image Error",
+                                                                              style: TextStyle(
+                                                                                fontSize: 15,
+                                                                                color: Colors.white70,
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      );
+                                                                    },                           
+                                                                  ),
+                                                                ):
                                                                 Text(
                                                                   "${val[index].value['message']}",
                                                                   style: TextStyle(
@@ -656,13 +840,27 @@ class _ChattingPageState extends State<ChattingPage> {
                           children: [
                             Container(
                               margin: EdgeInsets.symmetric(horizontal: 15),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.attachment,
-                                  color: Colors.white24,
-                                  size: 30,
+                              child: Transform.rotate(
+                                angle: 315 * math.pi / 180,
+                                child: IconButton(
+                                  icon: Icon(
+                                    Icons.attach_file,
+                                    size: 30,
+                                    color: Color(0xFFDDE6ED),
+                                  ),
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                        backgroundColor:
+                                            Colors.transparent,
+                                        context: context,
+                                        constraints: BoxConstraints(
+                                          maxHeight: 165,
+                                          maxWidth: 325
+                                        ),
+                                        builder: (builder) =>
+                                            bottomSheet());
+                                  },
                                 ),
-                                onPressed: null,
                               ),
                             ),
                             Expanded(
@@ -679,7 +877,7 @@ class _ChattingPageState extends State<ChattingPage> {
                                 ),
                                 cursorColor: Colors.white30,
                                 onFieldSubmitted: (value){
-                                  submitMessage();
+                                  submitMessage("message",'');
                                 },
                                 decoration: InputDecoration(
                                   hintText: 'Kirim Pesan',
@@ -717,7 +915,7 @@ class _ChattingPageState extends State<ChattingPage> {
                                   hoverColor: Colors.white54,
                                   onPressed: (){
                                     // FirebaseAuth.instance.;
-                                    submitMessage();
+                                    submitMessage("message",'');
                                   },
                                 ),
                               ),
@@ -736,4 +934,93 @@ class _ChattingPageState extends State<ChattingPage> {
       
     );
   }
+  Widget bottomSheet() {
+    return Container(
+      height: 165,
+      child: Card(
+        color: Color.fromARGB(255, 59, 74, 94),
+        margin: const EdgeInsets.all(18.0),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 20),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // iconCreation(
+                  //     Icons.insert_drive_file, Colors.indigo, "Document"),
+                  // SizedBox(
+                  //   width: 40,
+                  // ),
+                  // iconCreation(Icons.camera_alt, Colors.pink, "Camera",
+                  //   (){
+                  //     getImageCamera();
+                  //   }
+                  // ),
+                  // SizedBox(
+                  //   width: 40,
+                  // ),
+                  iconCreation(Icons.insert_photo, Colors.purple, "Gallery",
+                    (){
+                      getImageGallery();
+                    }
+                  ),
+                ],
+              ),
+              // SizedBox(
+              //   height: 30,
+              // ),
+              // Row(
+              //   mainAxisAlignment: MainAxisAlignment.center,
+              //   children: [
+              //     iconCreation(Icons.headset, Colors.orange, "Audio"),
+              //     SizedBox(
+              //       width: 40,
+              //     ),
+              //     iconCreation(Icons.location_pin, Colors.teal, "Location"),
+              //     SizedBox(
+              //       width: 40,
+              //     ),
+              //     iconCreation(Icons.person, Colors.blue, "Contact"),
+              //   ],
+              // ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget iconCreation(IconData icons, Color color, String text, dynamic onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: color,
+            child: Icon(
+              icons,
+              // semanticLabel: "Help",
+              size: 29,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(
+            height: 5,
+          ),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFFDDE6ED)
+              // fontWeight: FontWeight.w100,
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
 }
